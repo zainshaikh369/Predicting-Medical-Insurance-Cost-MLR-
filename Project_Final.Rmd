@@ -1,0 +1,326 @@
+---
+title: "Project Final"
+author: "Zain Shaikh"
+date: "2024-04-24"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Predicting Medical Insurance Cost
+
+## Loading data
+
+```{r}
+library(ggplot2)
+library(ROSE)
+
+med <- read.csv("medical_insurance.csv")
+
+head(med)
+str(med)
+
+
+
+
+```
+
+## Data Cleaning
+
+```{r}
+
+nrow(med) # total rows
+
+sum(duplicated(med)) # duplicated rows
+
+med <- med[!duplicated(med), ] #without duplicates
+
+med <- na.omit(med)
+
+tab <- table(med$smoker) #smoker counts
+
+barplot(table(med$smoker)) #Smoker
+
+
+barplot(table(med$children)) #Children
+
+barplot(table(med$region)) #region
+
+barplot(table(med$sex)) #Sex
+
+
+# library(ggplot2)
+# ggplot(med, aes(x = smoker, charges)) +
+#   geom_bar()
+
+
+
+# Factorize
+
+med <- within(med, {sex = factor(sex) ; smoker = factor(smoker) ; region = factor(region) ; children = factor(children) })
+str(med)
+
+
+
+
+
+```
+
+## Exploratory Data Analysis
+
+```{r}
+
+pairs(charges ~ . , data = med) #scatterplot matrix
+
+
+# hist of bmi
+ggplot(med, aes(bmi)) +
+  geom_histogram(bins = 35,colour="black",fill="plum") + 
+  labs(title = "histogram of BMI",x="BMI", y = "Count")
+
+
+#hist of charges
+ggplot(med, aes(charges)) +
+  geom_histogram(bins = 25,colour="black",fill="plum") + 
+  labs(title = "histogram of Charges",x="Charges", y = "Count")
+
+#(Suggests transformation)
+
+
+#hist of age
+ggplot(med, aes(age)) +
+  geom_histogram(bins = 20,colour="black",fill="plum") + 
+  labs(title = "histogram of Age",x="Age", y = "Count")
+
+
+
+
+
+
+
+# Load the necessary libraries
+
+```
+
+## Models
+
+```{r}
+library(faraway) # to use vif() function
+library(car)
+library(MASS)
+
+lm_full <- lm(charges ~ . , data = med) #sex Not sigf. Transformation ?
+summary(lm_full)
+
+plot(lm_full)
+
+
+
+
+lm_2 <- lm(log(charges) ~ . , data = med) #further improvement needed
+summary(lm_2)
+plot(lm_2)
+
+
+round(vif(lm_2), 2) # no multicollinearity
+
+
+
+
+plot(med$age, rstandard(lm_2))
+plot(med$bmi, rstandard(lm_2)) # No motivation for polynomial
+
+
+#checking for interactions for improvement
+
+
+ggplot(med, aes(bmi, charges, colour = smoker)) +  #No interaction
+geom_point(alpha=0.7) +
+geom_smooth(method="lm", se=FALSE)
+
+ggplot(med, aes(age + bmi, charges, colour = smoker)) +  #Yes interaction. 3 way
+geom_point(alpha=0.7) +
+geom_smooth(method="lm", se=FALSE)
+
+
+ggplot(med, aes(bmi, charges, colour = smoker)) +  #Yes Interaction
+geom_point(alpha=0.7) +
+geom_smooth(method="lm", se=FALSE)
+
+ggplot(med, aes(bmi, charges, colour = region)) + #Somewhat interaction
+geom_point(alpha=0.7) +
+geom_smooth(method="lm", se=FALSE)
+
+ggplot(med, aes(bmi, charges, colour = region)) + #somewhat interaction
+geom_point(alpha=0.7) +
+geom_smooth(method="lm", se=FALSE)
+
+
+ggplot(med, aes(bmi, charges, colour = children)) + #somewhat interaction. Check
+geom_point(alpha=0.7) +
+geom_smooth(method="lm", se=FALSE)
+
+
+ggplot(med, aes(age, charges, colour = children)) + #somewhat interaction
+geom_point(alpha=0.7) +
+geom_smooth(method="lm", se=FALSE)
+
+
+ggplot(med, aes(bmi, charges, colour = sex)) + #Yes interaction
+geom_point(alpha=0.7) +
+geom_smooth(method="lm", se=FALSE)
+
+
+ggplot(med, aes(age, charges, colour = sex)) + #No Interaction
+geom_point(alpha=0.7) +
+geom_smooth(method="lm", se=FALSE)
+
+
+
+lm_3 <- lm(log(charges) ~ age + bmi + children + sex + region + bmi:smoker + bmi:region + bmi:children + age:children + bmi:sex, data = med)
+summary(lm_3)
+
+
+lm_4 <- lm(log(charges) ~ age + bmi + children + sex + region + smoker + bmi:smoker + bmi:region + age:children + age:smoker:bmi, data = med)
+summary(lm_4)
+
+
+plot(lm_4)
+
+
+lm_4_step <- step(lm_4) # Same model as ours
+summary(lm_4_step)
+
+AIC(lm_4_step)
+
+
+
+AIC(lm_full) #Worst model
+AIC(lm_2)
+AIC(lm_4)  # Best model with lowest
+
+
+
+summary(powerTransform(lm_4))
+boxcox(lm_4, lambda = seq(1, 3, 0.05))
+
+
+
+
+lm_5 <- lm(log(charges)^2 ~ age + bmi + children + sex + region + bmi:smoker + bmi:region + age:children + age:smoker:bmi, data = med)
+summary(lm_5)
+
+plot(lm_5)
+
+AIC(lm_5) # checked box cox but AIC went up
+
+
+plot(fitted(lm_4), med$charges) # observed vs fitted
+plot(fitted(lm_full), med$charges)
+
+```
+
+Equation:
+
+$log(Charges) = 7.0034 + 0.0400Age + 0.0017BMI + 0.2571Children1 + 0.8016Children2 + 0.6053Children3 + 1.1510Children4 + 0.9085Children5 - 0.0921Sex - 0.0082RegionNorthWest + 0.2610RegionSouthEast - 0.0170RegionSouthWest + 0.0051Smoker + 0.0909BMI.Smoker - 0.0020BMI.RegionNorthWest - 0.0130BMI.RegionSouthEast - 0.0047BMI.RegionSouthWest - 0.0027Age.Children1 - 0.013Age.Children2 - 0.0087Age.Children3 - 0.0165Age.Children4 - 0.0117Age.Children5 + 0.0001Age.Bmi.SmokerNo - 0.0009Age.BMI.SmokerYes$
+
+
+## Splitting the data (80:20)
+
+```{r}
+set.seed(101)
+ind <- sample(2, nrow(med), replace = TRUE, prob = c(0.8, 0.2))
+train <- med[ind==1,]
+test <- med[ind==2,]
+
+nrow(train)
+table(train$smoker)
+
+nrow(med)
+table(med$smoker)
+```
+
+## Cross validation and Undersampling (future work)
+
+```{r}
+library(tidyverse)
+library(caret) # for cross-validation methods
+# Make predictions and compute the R2, RMSE and MAE
+
+model_train <- lm(log(charges) ~ age + bmi + children + sex + region + bmi:smoker + bmi:region + age:children + age:smoker:bmi, data = train)
+summary(model_train)
+
+  
+  
+
+
+# RMSE for test data from model trained on training data
+
+predictions <- predict(lm_4, test)
+
+predictions <- exp(predictions)
+
+data.frame( R2 = R2(predictions, test$charges),
+
+            RMSE = RMSE(predictions, test$charges),
+
+            MAE = MAE(predictions, test$charges))
+
+
+
+#Undersampling on training data
+
+under <- ovun.sample(smoker~., data=train, method = "under", N = 600)$data
+table(under$smoker)
+
+table(med$smoker)
+
+barplot(table(under$smoker))
+
+
+# Refitting the model on undersampled data
+
+model_train_us <- lm(log(charges) ~ age + bmi + children + sex + region + bmi:smoker + bmi:region + age:children + age:smoker:bmi, data = under)
+summary(model_train_us)
+
+plot(model_train_us, 1:2)
+
+
+
+# RMSE for test data from model trained on undersampled data
+predictions <- predict(model_train_us, test)
+
+predictions <- exp(predictions)
+
+data.frame( R2 = R2(predictions, test$charges),
+
+            RMSE = RMSE(predictions, test$charges),
+
+            MAE = MAE(predictions, test$charges))
+ 
+```
+
+
+## outliers and further analysis
+
+```{r}
+# Outliers and high leverage
+
+p <- 8
+n <- nrow(med)
+
+plot(hatvalues(lm_4), rstandard(lm_4),
+xlab='Leverage', ylab='Standardized Residuals')
+abline(v = 2*(p+1)/n, lty=2, col = "red") # threshold for high leverage
+abline(h=c(-4,4), lty=2) # threshold for outliers
+
+
+#counting the bad leverage points
+med[which(abs(hatvalues(lm_4)) > (2*(p+1)/n) & abs(rstandard(lm_4)) > 4), ]
+```
+
+
+
+
